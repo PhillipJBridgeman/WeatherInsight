@@ -126,7 +126,8 @@ class WeatherScraper(HTMLParser):
                     result = future.result()
                     if result:
                         weather_data.update(result)
-                except Exception as e:
+                except (urllib.error.HTTPError, urllib.error.URLError) as e:
                     print(f"Error processing data for {date}: {e}")
-
+                except ValueError as e:
+                    print(f"Value error processing data for {date}: {e}")
         return weather_data
