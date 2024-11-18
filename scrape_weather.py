@@ -10,6 +10,8 @@ Version: 1.0
 
 import urllib.request
 from html.parser import HTMLParser
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class WeatherScraper(HTMLParser):
     '''
@@ -74,25 +76,57 @@ class WeatherScraper(HTMLParser):
                     except ValueError:
                         self.current_row.append(None)
 
-# Fetch HTML content
-base_url = "http://climate.weather.gc.ca/climate_data/daily_data_e.html"
-station_id = 27174 # Winnipeg Station ID
-year = 2024
-month = 11
+    def fetch_data(self, url):
+        '''
+        Fetch the weather data from the specified URL.
+        '''
+        try:
+            with urllib.request.urlopen(url) as response:
+                html_content = response.read().decode("utf-8")
+                if "No data available for this station" in html_content:
+                    return None
+                self.feed(html_content)
+                return self.data.copy()
+        except urllib.error.HTTPError as e:
+            print(f"Error fetching data from {url}: {e}")
+            return None
+        except urllib.error.URLError as e:
+            print(f"HTTP error fetching data from {url}: {e}")
+            return None
 
-url = f"{base_url}?StationID={station_id}&timeframe=2&StartYear=1840&EndYear={year}&Day=1&Year={year}&Month={month}"
-with urllib.request.urlopen(url) as response:
-    html_content = response.read().decode("utf-8")
+    def scrape(self, base_url, station_id):
+        '''
+        Scrape the weather data from the specified base URL and station ID.
+        '''
+        start_date = datetime.now()
+        end_date = datetime(1996, 10, 1)
+        weather_data = {}
 
-# Scrape data
-scraper = WeatherScraper()
-scraper.feed(html_content)
+        urls = []
+        current_date = start_date
+        while current_date >= end_date:
+            year, month = current_date.year, current_date.month
+            url = (
+                f"{base_url}?StationID={station_id}"
+                f"&timeframe=2&StartYear=1840&EndYear={year}"
+                f"&Day=1&Year={year}&Month={month}"
+            )
+            urls.append((url, current_date.strftime("%Y-%m")))
+            if month == 1:
+                current_date = datetime(year - 1, 12, 1)
+            else:
+                current_date = datetime(year, month - 1, 1)
 
-# Print the scraped data
-for date, temps in scraper.data.items():
-    print(
-        f"Date: {date}, "
-        f"Max Temp: {temps['Max Temp']}, "
-        f"Min Temp: {temps['Min Temp']}, "
-        f"Mean Temp: {temps['Mean Temp']}"
-    )
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_date = {executor.submit(self.fetch_data, url): date for url, date in urls}
+
+            for future in as_completed(future_to_date):
+                date = future_to_date[future]
+                try:
+                    result = future.result()
+                    if result:
+                        weather_data.update(result)
+                except Exception as e:
+                    print(f"Error processing data for {date}: {e}")
+
+        return weather_data
