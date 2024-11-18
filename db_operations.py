@@ -8,7 +8,13 @@ Last Modified: November 17, 2024
 Version: 1.0
 '''
 import os
-from dbcm import DBCM
+import sqlite3
+try:
+    from dbcm import DBCM
+except ImportError:
+    import sys
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    from dbcm import DBCM
 
 class DBOperations:
     '''
@@ -46,7 +52,6 @@ class DBOperations:
                         VALUES (?, ?, ?, ?, ?)
                     """, (sample_date, location, temps["Min"], temps["Max"], temps["Mean"]))
                 except sqlite3.IntegrityError:
-                    # Skip duplicate entries
                     pass
 
     def fetch_data(self):
@@ -55,7 +60,13 @@ class DBOperations:
         :return: List of rows containing weather data.
         """
         with DBCM(self.db_name) as cursor:
-            cursor.execute("SELECT sample_date, location, min_temp, max_temp, avg_temp FROM weather")
+            cursor.execute(
+                """SELECT sample_date,
+                location, min_temp,
+                max_temp, 
+                avg_temp
+                FROM weather"""
+                )
             return cursor.fetchall()
 
     def purge_data(self):
