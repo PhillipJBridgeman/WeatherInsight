@@ -4,15 +4,17 @@ scrape_weather.py
 Description: This script will scrape the weather data from Environment Canada.
 Author: Phillip Bridgeman
 Date: October 30, 2024
-Last Modified: November 17, 2024
-Version: 1.0
+Last Modified: November 22, 2024
+Version: 1.2
 """
 
 import urllib.request
+import json
 from thread_cal import calculate_thread_pool
 from html.parser import HTMLParser
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 class WeatherScraper(HTMLParser):
     '''
@@ -26,7 +28,6 @@ class WeatherScraper(HTMLParser):
         self.in_table = False
         self.in_tbody = False
         self.current_row = []
-        self.headers = []
         self.data = {}
         self.current_date = None
 
@@ -59,7 +60,6 @@ class WeatherScraper(HTMLParser):
                 }
             elif self.current_date in ["Sum", "Avg", "Xtrm"]:
                 print(f"Skipping summary row: {self.current_date}")
-
             self.current_row = []
             self.current_date = None
 
@@ -81,34 +81,34 @@ class WeatherScraper(HTMLParser):
         '''
         Fetch the weather data from the specified URL.
         '''
+        print(f"Fetching data from: {url}")
         try:
             with urllib.request.urlopen(url) as response:
                 html_content = response.read().decode("utf-8")
                 if "No data available for this station" in html_content:
-                    return None  # Stop if no data available
+                    print(f"No data available for URL: {url}")
+                    return None
                 self.feed(html_content)
                 return self.data.copy()
-        except urllib.error.HTTPError as e:
-            print(f"Error fetching data from {url}: {e}")
-            return None
-        except urllib.error.URLError as e:
-            print(f"HTTP error fetching data from {url}: {e}")
+        except Exception as e:
+            print(f"Error fetching or parsing data from {url}: {e}")
             return None
 
     def scrape(self, base_url, station_id):
         '''
         Scrape the weather data from the specified base URL and station ID.
         '''
-        # Dynamically calculate optimal thread pool size
         max_workers = calculate_thread_pool(task_type="io", max_threads=140)
         print(f"Using {max_workers} threads for scraping.")
 
         start_date = datetime.now()
+        end_date = datetime(2020, 1, 1)  # Start scraping from January 2020
         weather_data = {}
         current_date = start_date
-
         urls = []
-        while True:
+
+        # Generate URLs for scraping
+        while current_date >= end_date:
             year, month = current_date.year, current_date.month
             url = (
                 f"{base_url}?StationID={station_id}"
@@ -117,28 +117,23 @@ class WeatherScraper(HTMLParser):
             )
             urls.append((url, current_date.strftime("%Y-%m")))
 
+            # Move to the previous month
             if month == 1:
                 current_date = datetime(year - 1, 12, 1)
             else:
                 current_date = datetime(year, month - 1, 1)
 
-            # Stop if you've reached the earliest date
-            if len(urls) > 0 and urls[-1][1] == "1840-01":
-                break
-
+        # Use threads to fetch data concurrently
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_date = {executor.submit(self.fetch_data, url): date for url, date in urls}
-
             for future in as_completed(future_to_date):
                 date = future_to_date[future]
                 try:
                     result = future.result()
                     if result:
                         weather_data.update(result)
-                except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                except Exception as e:
                     print(f"Error processing data for {date}: {e}")
-                except ValueError as e:
-                    print(f"Value error processing data for {date}: {e}")
         
         return weather_data
 
@@ -155,5 +150,10 @@ if __name__ == "__main__":
         print("Scraping completed successfully! Here is some sample data:\n")
         for date, data in list(weather_data.items())[:5]:  # Display first 5 entries
             print(f"{date}: Max: {data['Max Temp']}, Min: {data['Min Temp']}, Mean: {data['Mean Temp']}")
+        
+        # Save data to a JSON file
+        with open("weather_data_2020_present.json", "w") as file:
+            json.dump(weather_data, file, indent=4)
+        print("Weather data saved to 'weather_data_2020_present.json'.")
     else:
         print("No data was scraped.")
