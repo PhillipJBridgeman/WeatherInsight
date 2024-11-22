@@ -84,7 +84,7 @@ class WeatherScraper(HTMLParser):
             with urllib.request.urlopen(url) as response:
                 html_content = response.read().decode("utf-8")
                 if "No data available for this station" in html_content:
-                    return None
+                    return None  # Stop if no data available
                 self.feed(html_content)
                 return self.data.copy()
         except urllib.error.HTTPError as e:
@@ -99,35 +99,43 @@ class WeatherScraper(HTMLParser):
         Scrape the weather data from the specified base URL and station ID.
         '''
         start_date = datetime.now()
-        end_date = datetime(1996, 10, 1)
         weather_data = {}
-
-        urls = []
         current_date = start_date
-        while current_date >= end_date:
+
+        while True:
             year, month = current_date.year, current_date.month
             url = (
                 f"{base_url}?StationID={station_id}"
                 f"&timeframe=2&StartYear=1840&EndYear={year}"
                 f"&Day=1&Year={year}&Month={month}"
             )
-            urls.append((url, current_date.strftime("%Y-%m")))
+            print(f"Fetching data for {current_date.strftime('%Y-%m')}...")
+            result = self.fetch_data(url)
+            if not result:  # Stop if no data is available
+                print("No more data available. Stopping.")
+                break
+            weather_data.update(result)
+
+            # Go to the previous month
             if month == 1:
                 current_date = datetime(year - 1, 12, 1)
             else:
                 current_date = datetime(year, month - 1, 1)
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            future_to_date = {executor.submit(self.fetch_data, url): date for url, date in urls}
-
-            for future in as_completed(future_to_date):
-                date = future_to_date[future]
-                try:
-                    result = future.result()
-                    if result:
-                        weather_data.update(result)
-                except (urllib.error.HTTPError, urllib.error.URLError) as e:
-                    print(f"Error processing data for {date}: {e}")
-                except ValueError as e:
-                    print(f"Value error processing data for {date}: {e}")
         return weather_data
+
+
+if __name__ == "__main__":
+    base_url = "https://climate.weather.gc.ca/climate_data/daily_data_e.html"
+    station_id = 27174  # Example: Winnipeg Station ID
+    
+    scraper = WeatherScraper()
+    print("Starting weather data scraping...")
+    weather_data = scraper.scrape(base_url, station_id)
+    
+    if weather_data:
+        print("Scraping completed successfully! Here is some sample data:\n")
+        for date, data in list(weather_data.items())[:5]:  # Display first 5 entries
+            print(f"{date}: Max: {data['Max Temp']}, Min: {data['Min Temp']}, Mean: {data['Mean Temp']}")
+    else:
+        print("No data was scraped.")
