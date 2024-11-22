@@ -9,6 +9,7 @@ Version: 1.0
 """
 
 import urllib.request
+from thread_cal import calculate_thread_pool
 from html.parser import HTMLParser
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -98,10 +99,15 @@ class WeatherScraper(HTMLParser):
         '''
         Scrape the weather data from the specified base URL and station ID.
         '''
+        # Dynamically calculate optimal thread pool size
+        max_workers = calculate_thread_pool(task_type="io", max_threads=140)
+        print(f"Using {max_workers} threads for scraping.")
+
         start_date = datetime.now()
         weather_data = {}
         current_date = start_date
 
+        urls = []
         while True:
             year, month = current_date.year, current_date.month
             url = (
@@ -109,19 +115,31 @@ class WeatherScraper(HTMLParser):
                 f"&timeframe=2&StartYear=1840&EndYear={year}"
                 f"&Day=1&Year={year}&Month={month}"
             )
-            print(f"Fetching data for {current_date.strftime('%Y-%m')}...")
-            result = self.fetch_data(url)
-            if not result:  # Stop if no data is available
-                print("No more data available. Stopping.")
-                break
-            weather_data.update(result)
+            urls.append((url, current_date.strftime("%Y-%m")))
 
-            # Go to the previous month
             if month == 1:
                 current_date = datetime(year - 1, 12, 1)
             else:
                 current_date = datetime(year, month - 1, 1)
 
+            # Stop if you've reached the earliest date
+            if len(urls) > 0 and urls[-1][1] == "1840-01":
+                break
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_date = {executor.submit(self.fetch_data, url): date for url, date in urls}
+
+            for future in as_completed(future_to_date):
+                date = future_to_date[future]
+                try:
+                    result = future.result()
+                    if result:
+                        weather_data.update(result)
+                except (urllib.error.HTTPError, urllib.error.URLError) as e:
+                    print(f"Error processing data for {date}: {e}")
+                except ValueError as e:
+                    print(f"Value error processing data for {date}: {e}")
+        
         return weather_data
 
 
