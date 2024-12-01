@@ -139,7 +139,7 @@ git push origin feature-branch-name
 ---
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
----
+
 ## Acknowledgments
 - Weather data is sourced from Environment Canada.
 - Developed as part of the Business Information Technology program at Red River College Polytechnic.
