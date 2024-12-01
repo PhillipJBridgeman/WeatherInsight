@@ -1,6 +1,6 @@
 # WeatherInsight
 WeatherInsight is a Python-based application that allows users to scrape, manage, and visualize weather data for specified date ranges. The application features a menu-driven interface to facilitate easy interaction.
----
+
 ## Features
 - **Download Weather Data:** Fetch a complete dataset for a predefined range of years.
 - **Update Weather Data:** Update the database with missing weather data, ensuring no duplication.
