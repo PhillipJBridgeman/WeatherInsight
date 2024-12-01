@@ -67,7 +67,9 @@ class WeatherScraper(HTMLParser):
             if self.in_tbody:
                 clean_data = data.strip()
                 if not self.current_date and clean_data.isdigit():
-                    self.current_date = f"{self.current_year}-{self.current_month:02d}-{int(clean_data):02d}"
+                    self.current_date = (
+                        f"{self.current_year}-{self.current_month:02d}-{int(clean_data):02d}"
+                        )
                 elif clean_data:
                     self.current_row.append(clean_data)
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
@@ -82,7 +84,8 @@ class WeatherScraper(HTMLParser):
         self.current_month = month
         url = (
             f"https://climate.weather.gc.ca/climate_data/daily_data_e.html?"
-            f"StationID={station_id}&timeframe=2&StartYear=1840&EndYear=2020&Day=1&Year={year}&Month={month}"
+            f"StationID={station_id}&timeframe=2&StartYear=1840&EndYear=2020&Day=1"
+            f"&Year={year}&Month={month}"
         )
         if self.debug:
             print(f"Fetching data from: {url}")
