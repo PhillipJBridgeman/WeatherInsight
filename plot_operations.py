@@ -1,9 +1,26 @@
+'''
+plot_operations.py
+
+Description: Handles all plotting operations for the weather application.
+Author: Phillip Bridgeman
+Date: November 17, 2024
+Last Modified: December 1, 2024
+Version: 1.2
+Copyright: (c) 2024 Phillip Bridgeman
+'''
 from collections import defaultdict
 import matplotlib.pyplot as plt
 
 class PlotOperations:
+    '''
+    PlotOperations class to handle all plotting operations.
+    '''
     def __init__(self):
-        pass
+        '''
+        Initialize the PlotOperations class.
+        '''
+        self.figsize = (10, 6)
+        self.grid = True
 
     def prepare_boxplot_data(self, raw_data):
         """
