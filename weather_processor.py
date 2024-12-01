@@ -38,7 +38,10 @@ class WeatherProcessor:
         tk.Button(frame, text="Download Full Data", command=self.download_data).pack(pady=10)
         tk.Button(frame, text="Update Data", command=self.update_data).pack(pady=10)
         tk.Button(frame, text="Generate Box Plot", command=self.generate_box_plot_gui).pack(pady=10)
-        tk.Button(frame, text="Generate Line Plot", command=self.generate_line_plot_gui).pack(pady=10)
+        tk.Button(frame,
+                  text="Generate Line Plot",
+                  command=self.generate_line_plot_gui
+                  ).pack(pady=10)
         tk.Button(frame, text="Exit", command=self.root.quit).pack(pady=10)
 
         self.root.mainloop()
@@ -47,18 +50,24 @@ class WeatherProcessor:
         """Download the full weather dataset for a predefined range of years."""
         try:
             current_year = date.today().year
-            weather_data = scrape_weather_data(start_year=2020, end_year=current_year, station_id=27174, debug=False)
+            weather_data = scrape_weather_data(start_year=2020,
+                                               end_year=current_year,
+                                               station_id=27174,
+                                               debug=False)
             self.db_ops.save_data(weather_data)
             messagebox.showinfo("Success", "Data downloaded and saved successfully!")
-        except Exception as e:
+        except (ValueError, TypeError, IOError) as e:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def update_data(self):
-        """Update the weather data by fetching data from the latest date in the database to today."""
+        """
+        Update the weather data by fetching data from the latest date in the database to today.
+        """
         try:
             last_date = self.db_ops.get_latest_date()
             if not last_date:
-                messagebox.showwarning("Warning", "No data found. Please download the full dataset first.")
+                messagebox.showwarning("Warning",
+                                       "No data found. Please download the full dataset first.")
                 return
 
             last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
@@ -73,7 +82,7 @@ class WeatherProcessor:
             )
             self.db_ops.save_data(weather_data)
             messagebox.showinfo("Success", "Weather data updated successfully!")
-        except Exception as e:
+        except (ValueError, TypeError, IOError) as e:
             messagebox.showerror("Error", f"An error occurred: {e}")
 
     def generate_box_plot_gui(self):
@@ -84,7 +93,7 @@ class WeatherProcessor:
             try:
                 self.generate_box_plot(start_year, end_year)
                 plot_window.destroy()
-            except Exception as e:
+            except (ValueError, TypeError, IOError) as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
         plot_window = tk.Toplevel(self.root)
@@ -109,7 +118,7 @@ class WeatherProcessor:
             try:
                 self.generate_line_plot(year, month)
                 plot_window.destroy()
-            except Exception as e:
+            except (ValueError, TypeError, IOError) as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
         plot_window = tk.Toplevel(self.root)

@@ -32,8 +32,10 @@ class WeatherProcessor:
         # Add buttons for menu options
         tk.Button(self.frame, text="Download Full Data", command=self.download_data).pack(pady=10)
         tk.Button(self.frame, text="Update Data", command=self.update_data).pack(pady=10)
-        tk.Button(self.frame, text="Generate Box Plot", command=self.generate_box_plot_gui).pack(pady=10)
-        tk.Button(self.frame, text="Generate Line Plot", command=self.generate_line_plot_gui).pack(pady=10)
+        tk.Button(self.frame, text="Generate Box Plot", 
+                  command=self.generate_box_plot_gui).pack(pady=10)
+        tk.Button(self.frame, text="Generate Line Plot", 
+                  command=self.generate_line_plot_gui).pack(pady=10)
         tk.Button(self.frame, text="Exit", command=self.root.quit).pack(pady=10)
 
         # Status Label
@@ -60,7 +62,7 @@ class WeatherProcessor:
 
         if not last_date:
             self.status_label.config(text=(
-                f"Status: No data found. Please download the full dataset first."
+                "Status: No data found. Please download the full dataset first."
                 ))
             return
 
@@ -122,7 +124,7 @@ class WeatherProcessor:
             try:
                 self.generate_line_plot(year, month)
                 plot_window.destroy()
-            except (ValueError, TypeError, RuntimeError) as e:
+            except (TypeError, RuntimeError) as e:
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
         plot_window = tk.Toplevel(self.root)  # Use `self.root` as the parent
@@ -157,11 +159,13 @@ class WeatherProcessor:
                 self.plot_ops.generate_lineplot(lineplot_data, year=year, month=month)
                 self.status_label.config(text="Status: Line plot generated successfully!")
             else:
-                self.status_label.config(text="Status: No data available for the selected month and year.")
+                self.status_label.config(
+                    text="Status: No data available for the selected month and year."
+                )
         except ValueError:
             self.status_label.config(text="Input Error: Year and Month must be valid numbers.")
             messagebox.showerror("Input Error", "Year and Month must be valid numbers.")
-        except Exception as e:
+        except (TypeError, RuntimeError) as e:
             self.status_label.config(text=f"Error: {e}")
             messagebox.showerror("Error", f"Failed to generate line plot: {e}")
 
