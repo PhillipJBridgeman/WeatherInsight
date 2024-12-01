@@ -4,7 +4,7 @@ db_operations.py
 Description: Handles all database operations for the weather application.
 Author: Phillip Bridgeman
 Date: November 17, 2024
-Last Modified: November 22, 2024
+Last Modified: December 1, 2024
 Version: 1.2
 '''
 
@@ -57,7 +57,28 @@ class DBOperations:
                     # Skip duplicates
                     continue
 
+    def update_data(self, weather_data, location="Winnipeg"):
+        """
+        Update weather data in the database.
+        :param weather_data: Dictionary of weather data (date -> {Max, Min, Mean})
+        :param location: Location name (default: Winnipeg)
+        """
+        with DBCM(self.db_name) as cursor:
+            for sample_date, temps in weather_data.items():
+                try:
+                    cursor.execute("""
+                        UPDATE weather
+                        SET min_temp = ?, max_temp = ?, avg_temp = ?
+                        WHERE sample_date = ? AND location = ?
+                    """, (temps["Min"], temps["Max"], temps["Mean"], sample_date, location))
+                except sqlite3.IntegrityError:
+                    # Skip duplicates
+                    continue
+
     def fetch_data(self, filter_type="raw", year_range=None, year=None, month=None):
+        '''
+        Fetch weather data from the database based on the filter type and parameters.
+        '''
         try:
             if filter_type == "raw":
                 with DBCM(self.db_name) as cursor:
@@ -105,3 +126,19 @@ class DBOperations:
         """
         with DBCM(self.db_name) as cursor:
             cursor.execute("DELETE FROM weather")
+
+    def get_latest_date(self, location="Winnipeg"):
+        """
+        Fetch the latest date from the database for the given location.
+
+        :param location: Location name (default: Winnipeg)
+        :return: Latest date as a string (YYYY-MM-DD) or None if no records exist.
+        """
+        with DBCM(self.db_name) as cursor:
+            cursor.execute("""
+                SELECT MAX(sample_date)
+                FROM weather
+                WHERE location = ?
+            """, (location,))
+            result = cursor.fetchone()
+            return result[0] if result and result[0] else None
