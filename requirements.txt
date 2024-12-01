@@ -1,11 +1,3 @@
-# Python version used for this project
-python_version >= 3.7
-
-# Add dependencies if you enhance the scraper with additional libraries
-# Uncomment the following lines if using these libraries
-
-# requests             # A more user-friendly HTTP library
-# beautifulsoup4       # For advanced HTML parsing
-# lxml                 # Optional, for faster parsing with BeautifulSoup
-# pandas               # For processing and organizing scraped data
-# matplotlib           # For visualizing the weather data
+requests
+pandas
+matplotlib

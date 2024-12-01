@@ -1,159 +1,139 @@
-"""
+'''
 scrape_weather.py
 
-Description: This script will scrape the weather data from Environment Canada.
+Description: A script to scrape weather data from the Government of Canada website.
 Author: Phillip Bridgeman
 Date: October 30, 2024
 Last Modified: November 22, 2024
-Version: 1.2
-"""
+Version: 1.11
+'''
 
+from html.parser import HTMLParser
 import urllib.request
 import json
+from concurrent.futures import ThreadPoolExecutor
 from thread_cal import calculate_thread_pool
-from html.parser import HTMLParser
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 class WeatherScraper(HTMLParser):
     '''
-    WeatherScraper class to extract weather data from the HTML content.
+    WeatherScraper class to scrape weather data from the Government of Canada website.
     '''
-    def __init__(self):
+    def __init__(self, debug=False):
         '''
-        Initialize the WeatherScraper object.
+        Initialize the WeatherScraper class.
+        :param debug: If True, print debug information. Default is False.
         '''
         super().__init__()
-        self.in_table = False
-        self.in_tbody = False
-        self.current_row = []
-        self.data = {}
+        self.current_year = None
+        self.current_month = None
         self.current_date = None
+        self.current_row = []
+        self.weather_data = {}
+        self.in_tbody = False
+        self.debug = debug
 
     def handle_starttag(self, tag, attrs):
         '''
         Handle the start tag of an HTML element.
         '''
-        attrs = dict(attrs)
-        if tag == "table" and "class" in attrs and "data-table" in attrs["class"]:
-            self.in_table = True
-        elif self.in_table and tag == "tbody":
+        if tag == "tbody":
             self.in_tbody = True
-        elif self.in_tbody and tag == "th":
-            self.current_row = []
 
     def handle_endtag(self, tag):
         '''
         Handle the end tag of an HTML element.
         '''
-        if tag == "table" and self.in_table:
-            self.in_table = False
-        elif tag == "tbody" and self.in_tbody:
+        if tag == "tbody":
             self.in_tbody = False
-        elif tag == "tr" and self.in_tbody:
-            if len(self.current_row) >= 3 and self.current_date not in ["Sum", "Avg", "Xtrm"]:
-                self.data[self.current_date] = {
-                    "Max Temp": self.current_row[0],
-                    "Min Temp": self.current_row[1],
-                    "Mean Temp": self.current_row[2]
-                }
-            elif self.current_date in ["Sum", "Avg", "Xtrm"]:
-                print(f"Skipping summary row: {self.current_date}")
-            self.current_row = []
+
+        if tag == "tr" and self.current_date:
+            if len(self.current_row) >= 3:
+                try:
+                    self.weather_data[self.current_date] = {
+                        "Max": float(self.current_row[0]) if self.current_row[0] else None,
+                        "Min": float(self.current_row[1]) if self.current_row[1] else None,
+                        "Mean": float(self.current_row[2]) if self.current_row[2] else None,
+                    }
+                except ValueError:
+                    pass
             self.current_date = None
+            self.current_row = []
 
     def handle_data(self, data):
         '''
         Handle the data within an HTML element.
         '''
-        if self.in_tbody:
-            if data.strip():
-                if len(self.current_row) == 0 and self.current_date is None:
-                    self.current_date = data.strip()
-                else:
-                    try:
-                        self.current_row.append(float(data.strip()))
-                    except ValueError:
-                        self.current_row.append(None)
+        try:
+            if self.in_tbody:
+                clean_data = data.strip()
+                if not self.current_date and clean_data.isdigit():
+                    self.current_date = f"{self.current_year}-{self.current_month:02d}-{int(clean_data):02d}"
+                elif clean_data:
+                    self.current_row.append(clean_data)
+        except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
+            if self.debug:
+                print(f"Error parsing data: {e}")
 
-    def fetch_data(self, url):
+    def fetch_and_parse(self, year, month, station_id):
         '''
-        Fetch the weather data from the specified URL.
+        Fetch and parse the weather data for a given year and month.
         '''
-        print(f"Fetching data from: {url}")
+        self.current_year = year
+        self.current_month = month
+        url = (
+            f"https://climate.weather.gc.ca/climate_data/daily_data_e.html?"
+            f"StationID={station_id}&timeframe=2&StartYear=1840&EndYear=2020&Day=1&Year={year}&Month={month}"
+        )
+        if self.debug:
+            print(f"Fetching data from: {url}")
         try:
             with urllib.request.urlopen(url) as response:
-                html_content = response.read().decode("utf-8")
-                if "No data available for this station" in html_content:
-                    print(f"No data available for URL: {url}")
-                    return None
-                self.feed(html_content)
-                return self.data.copy()
-        except Exception as e:
-            print(f"Error fetching or parsing data from {url}: {e}")
-            return None
+                content = response.read().decode("utf-8")
+                self.feed(content)
+        except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
+            if self.debug:
+                print(f"Error fetching data from {url}: {e}")
 
-    def scrape(self, base_url, station_id):
-        '''
-        Scrape the weather data from the specified base URL and station ID.
-        '''
-        max_workers = calculate_thread_pool(task_type="io", max_threads=140)
-        print(f"Using {max_workers} threads for scraping.")
 
-        start_date = datetime.now()
-        end_date = datetime(2020, 1, 1)  # Start scraping from January 2020
-        weather_data = {}
-        current_date = start_date
-        urls = []
+def scrape_weather_data(start_year, end_year, station_id, debug=False):
+    '''
+    Scrape weather data for a range of years and return it as a dictionary.
+    :param debug: If True, print debug information. Default is False.
+    '''
+    max_threads = calculate_thread_pool(task_type="io")
+    if debug:
+        print(f"Using {max_threads} threads for scraping.")
 
-        # Generate URLs for scraping
-        while current_date >= end_date:
-            year, month = current_date.year, current_date.month
-            url = (
-                f"{base_url}?StationID={station_id}"
-                f"&timeframe=2&StartYear=1840&EndYear={year}"
-                f"&Day=1&Year={year}&Month={month}"
-            )
-            urls.append((url, current_date.strftime("%Y-%m")))
+    def fetch_for_year_month(year, month):
+        scraper = WeatherScraper(debug=debug)
+        scraper.fetch_and_parse(year, month, station_id)
+        return scraper.weather_data
 
-            # Move to the previous month
-            if month == 1:
-                current_date = datetime(year - 1, 12, 1)
-            else:
-                current_date = datetime(year, month - 1, 1)
+    all_weather_data = {}
 
-        # Use threads to fetch data concurrently
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_date = {executor.submit(self.fetch_data, url): date for url, date in urls}
-            for future in as_completed(future_to_date):
-                date = future_to_date[future]
-                try:
-                    result = future.result()
-                    if result:
-                        weather_data.update(result)
-                except Exception as e:
-                    print(f"Error processing data for {date}: {e}")
-        
-        return weather_data
+    with ThreadPoolExecutor(max_threads) as executor:
+        futures = []
+        for year in range(start_year, end_year + 1):
+            for month in range(1, 13):
+                futures.append(executor.submit(fetch_for_year_month, year, month))
+
+        for future in futures:
+            try:
+                weather_data = future.result()
+                all_weather_data.update(weather_data)
+            except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
+                if debug:
+                    print(f"Error processing future: {e}")
+
+    return all_weather_data
 
 
 if __name__ == "__main__":
-    base_url = "https://climate.weather.gc.ca/climate_data/daily_data_e.html"
-    station_id = 27174  # Example: Winnipeg Station ID
-    
-    scraper = WeatherScraper()
-    print("Starting weather data scraping...")
-    weather_data = scraper.scrape(base_url, station_id)
-    
-    if weather_data:
-        print("Scraping completed successfully! Here is some sample data:\n")
-        for date, data in list(weather_data.items())[:5]:  # Display first 5 entries
-            print(f"{date}: Max: {data['Max Temp']}, Min: {data['Min Temp']}, Mean: {data['Mean Temp']}")
-        
-        # Save data to a JSON file
-        with open("weather_data_2020_present.json", "w") as file:
-            json.dump(weather_data, file, indent=4)
-        print("Weather data saved to 'weather_data_2020_present.json'.")
-    else:
-        print("No data was scraped.")
+    # Enable debug mode when running as a standalone script
+    scraped_data = scrape_weather_data(start_year=2020, end_year=2024, station_id=27174, debug=True)
+    print("Scraping completed. Saving data to file...")
+    with open("weather_data_2020_present.json", "w", encoding="utf-8") as f:
+        json.dump(scraped_data, f, indent=4)
+    print("Weather data saved to 'weather_data_2020_present.json'.")
+    sample = list(scraped_data.items())[:5]
+    print(f"Sample data: {sample}")
