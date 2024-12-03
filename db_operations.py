@@ -4,27 +4,36 @@ db_operations.py
 Description: Handles all database operations for the weather application.
 Author: Phillip Bridgeman
 Date: November 17, 2024
-Last Modified: December 1, 2024
-Version: 1.2
+Last Modified: December 3, 2024
+Version: 1.3
 '''
 
 import sqlite3
+import os
 from dbcm import DBCM
+
 
 class DBOperations:
     """
     DBOperations class to handle all database operations.
     """
+
     def __init__(self, db_name="weather_data.db"):
-        '''
-        Initialize the database name.
-        '''
-        self.db_name = db_name
+        """
+        Initialize the database path. The database file will be stored in the user's
+        local application data folder to ensure write permissions.
+        """
+        app_data_dir = os.getenv("LOCALAPPDATA", os.getcwd())
+        self.db_name = os.path.join(app_data_dir, db_name)
+
+        if not os.path.exists(app_data_dir):
+            os.makedirs(app_data_dir)
 
     def initialize_db(self):
         """
         Initialize the database and create the table if it doesn't exist.
         """
+        print(f"Initializing database at: {self.db_name}")
         with DBCM(self.db_name) as cursor:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS weather (
@@ -54,7 +63,6 @@ class DBOperations:
                         VALUES (?, ?, ?, ?, ?)
                     """, (sample_date, location, temps["Min"], temps["Max"], temps["Mean"]))
                 except sqlite3.IntegrityError:
-                    # Skip duplicates
                     continue
 
     def update_data(self, weather_data, location="Winnipeg"):
@@ -72,13 +80,12 @@ class DBOperations:
                         WHERE sample_date = ? AND location = ?
                     """, (temps["Min"], temps["Max"], temps["Mean"], sample_date, location))
                 except sqlite3.IntegrityError:
-                    # Skip duplicates
                     continue
 
     def fetch_data(self, filter_type="raw", year_range=None, year=None, month=None):
-        '''
+        """
         Fetch weather data from the database based on the filter type and parameters.
-        '''
+        """
         try:
             if filter_type == "raw":
                 with DBCM(self.db_name) as cursor:
@@ -118,7 +125,7 @@ class DBOperations:
         """
         with DBCM(self.db_name) as cursor:
             cursor.execute("SELECT * FROM weather")
-            return cursor.fetchall()  # Explicitly return rows tuple
+            return cursor.fetchall()
 
     def purge_data(self):
         """
@@ -142,3 +149,9 @@ class DBOperations:
             """, (location,))
             result = cursor.fetchone()
             return result[0] if result and result[0] else None
+
+
+if __name__ == "__main__":
+    db = DBOperations()
+    db.initialize_db()
+    print("Database initialized successfully.")

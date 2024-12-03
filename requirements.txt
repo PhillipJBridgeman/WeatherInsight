@@ -2,4 +2,3 @@ requests
 pandas
 matplotlib
 pylint
-tkinter
